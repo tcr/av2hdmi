@@ -1,6 +1,6 @@
 extern "C" {
     fn fn_setup() -> u32;
-    fn fn_collect() -> *const u16;
+    fn fn_collect(buf: *mut u16) -> *const u16;
 }
 
 fn main() {
@@ -37,25 +37,27 @@ fn main() {
         fn_setup();
 
         let sample_count = 10000;
+        let sample_loop = 40;
 
+        let mut section = 0;
+        let SECTION_HEIGHT = 8;
         loop {
-            let mut frame = vec![];
-            for i in 0..80 {
-                let buf = fn_collect();
+            let mut raw_frame: Vec<u16> = vec![0; sample_count];
+            // for i in 0..sample_loop {
+                fn_collect(&mut raw_frame[0] as *mut u16);
                 // println!("collecting...");
-                let line = std::slice::from_raw_parts(buf, sample_count).iter().map(|x| (2080.0 - (*x as f32)) / 410.0).collect::<Vec<_>>();
+                // let line = std::slice::from_raw_parts(buf, sample_count)();
                 // println!("{:?}", line);
                 // println!("done...\n\n");
-                frame.extend(&line);
-            }
+                // frame.extend(&line);
+                std::thread::sleep_ms(1);
+            // }
+            let frame = raw_frame.iter().map(|x| (2080.0 - (*x as f32)) / 410.0).collect::<Vec<_>>();
 
             // let mut file = File::create("out.csv").unwrap();
 
-            // TODO draw directly to framebuffer with no raquote. try to capture full frame
-
             // let mut dt = DrawTarget::new(800, 600);
             let size = fb.get_size();
-
 
             let (prefix, pixels, suffix) = unsafe { data.align_to_mut::<u32>() };
             assert_eq!(prefix.len(), 0);
@@ -64,57 +66,89 @@ fn main() {
             // Smooth it!
             let WIN_LENGTH = 16;
             let mut x = 0;
-            let mut y = 0;
-            let mut last = 0.0;
-            // println!("----");
+            let mut y = section * SECTION_HEIGHT;
+
+            // Make everything white:
+            for i in 0..SECTION_HEIGHT {
+                for x2 in 0..166 {
+                    draw_pixel(pixels, x2, y + i, 0x940000, size);
+                }
+            }
+
+            let mut last = 0;
+            let mut active = false;
             for (i, w) in frame.chunks(WIN_LENGTH).take(200*40).enumerate() {
                 let a: f32 = w.iter().sum::<f32>() / (WIN_LENGTH as f32);
-                if last < -0.1 && a > -0.1 {
-                    // if y < 10 {
-                    //     println!("{:?}", x);
-                    // }
-                    x = 0;
-                    y += 1;
-                }
-                if y > 100 {
-                    break;
-                }
-                last = a;
-                // println!("{:?}", a);
-                // if a < 0.0 {
-                //     if x > 20 {
-                //         y += 1;
+
+                // if a < -0.1 {
+                //     last += 1;
+                // } else {
+                //     if last > 5 {
+                //         active = true;
+                        // if x > 40 {
+                        //     y += 1;
+                        // }
+                        // x = 0;
+
+                        // for xfill in 0..165 {
+                        //     draw_pixel(pixels, xfill, y, 0x221111, size);
+                        // }
                 //     }
-                //     x = 0;
+                //     last = 0;
+                // }
+
+                // if !active {
                 //     continue;
                 // }
 
-                draw_pixel(pixels, x, y, a);
+                // if y < 10 {
+                //     println!("{:?}", x);
+                // }
+                // }
+                if y > 100 {
+                    break;
+                }
+                // last = a;
+
+                draw_pixel(pixels, x, y, volt_to_color(a), size);
+
+                // if i % 625 == 0 {
+                //     draw_pixel(pixels, x, y, 0x00ff00, size);
+                // }
 
                 if x < 165 {
                     x += 1;
                 } else {
-                    // x = 0;
-                    // y += 1;
+                    x = 0;
+                    y += 1;
                 }
                 // if x > 165 {
                 //     y += 1;
                 //     x = 0;
                 // }
             }
+
+            section += 1;
+            if section > 12 {
+                section = 0;
+            }
         }
     }
 }
 
-fn draw_pixel(pixels: &mut [u32], x: usize, y: usize, value: f32) {
-    let MUL = 6;
-    let mut lum = (a * (0xff as f32)) as u32;
+fn volt_to_color(value: f32) -> u32 {
+    let mut lum = (value * (0xff as f32)) as u32;
     if lum > 0xFF {
         lum = 0xFF;
     }
+    return (lum << 16) + (lum << 8) + lum;
+}
+
+fn draw_pixel(pixels: &mut [u32], x: usize, y: usize, color: u32, size: (u32, u32)) {
+    let MUL = 6;
     for nx in x*MUL..(x+1)*MUL {
         for ny in y*5..(y+1)*5 {
-            pixels[ ((12 + ny) * (size.0 as usize)) + (60 + nx)] = (lum << 16) + (lum << 8) + lum;
+            pixels[ ((12 + ny) * (size.0 as usize)) + (60 + nx)] = color;
         }
     }
 }
