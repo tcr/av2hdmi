@@ -1,6 +1,6 @@
 extern "C" {
     fn fn_setup() -> u32;
-    fn fn_collect(buf: *mut u16) -> *const u16;
+    fn fn_collect() -> *const u16;
 }
 
 fn main() {
@@ -36,7 +36,7 @@ fn main() {
     unsafe {
         fn_setup();
 
-        let sample_count = 10000;
+        let sample_count = 21300;
         let sample_loop = 40;
 
         let mut section = 0;
@@ -44,15 +44,16 @@ fn main() {
         loop {
             let mut raw_frame: Vec<u16> = vec![0; sample_count];
             // for i in 0..sample_loop {
-                fn_collect(&mut raw_frame[0] as *mut u16);
+                let rx_addr = fn_collect();
+                std::ptr::copy_nonoverlapping(rx_addr, &mut raw_frame[0] as *mut u16, sample_count);
                 // println!("collecting...");
                 // let line = std::slice::from_raw_parts(buf, sample_count)();
                 // println!("{:?}", line);
                 // println!("done...\n\n");
                 // frame.extend(&line);
-                std::thread::sleep_ms(1);
+                // std::thread::sleep_ms(1);
             // }
-            let frame = raw_frame.iter().map(|x| (2080.0 - (*x as f32)) / 410.0).collect::<Vec<_>>();
+            let frame = raw_frame.iter().map(|x| (2080.0 - ((*x >> 4) as f32)) / 410.0).collect::<Vec<_>>();
 
             // let mut file = File::create("out.csv").unwrap();
 
@@ -77,7 +78,7 @@ fn main() {
 
             let mut last = 0;
             let mut active = false;
-            for (i, w) in frame.chunks(WIN_LENGTH).take(200*40).enumerate() {
+            for (i, w) in frame.chunks(WIN_LENGTH).enumerate() {
                 let a: f32 = w.iter().sum::<f32>() / (WIN_LENGTH as f32);
 
                 // if a < -0.1 {
@@ -131,6 +132,7 @@ fn main() {
             section += 1;
             if section > 12 {
                 section = 0;
+                // std::thread::sleep_ms(200);
             }
         }
     }
