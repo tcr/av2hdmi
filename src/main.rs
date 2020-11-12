@@ -36,23 +36,18 @@ fn main() {
     unsafe {
         fn_setup();
 
-        let sample_count = 20000;
-        let sample_loop = 30;
+        let sample_count = 31870;
+        let sample_loop = 10;
 
-        let mut section = 0;
-        let SECTION_HEIGHT = 8;
         loop {
-            section = 0;
+
+            // Sample DMA several times.
             let mut raw_frame: Vec<u16> = vec![0; sample_count*sample_loop];
             for i in 0..sample_loop {
                 fn_collect(&mut raw_frame[i * sample_count] as *mut u16);
-                // println!("collecting...");
-                // let line = std::slice::from_raw_parts(buf, sample_count)();
-                // println!("{:?}", line);
-                // println!("done...\n\n");
-                // frame.extend(&line);
-                // std::thread::sleep_ms(1);
             }
+
+            // Convert raw data into frame.
             let frame = raw_frame.iter().map(|x| (2080.0 - ((*x >> 4) as f32)) / 410.0).collect::<Vec<_>>();
 
             // let mut file = File::create("out.csv").unwrap();
@@ -67,13 +62,11 @@ fn main() {
             // Smooth it!
             let WIN_LENGTH = 16;
             let mut x = 0;
-            let mut y = section * SECTION_HEIGHT;
+            let mut y = 0;
 
             // Make everything white:
-            for i in 0..SECTION_HEIGHT {
-                for x2 in 0..166 {
-                    draw_pixel(pixels, x2, y + i, 0x940000, size);
-                }
+            for x2 in 0..166 {
+                draw_pixel(pixels, x2, y, 0x940000, size);
             }
 
             let mut last = 0;
@@ -127,12 +120,6 @@ fn main() {
                 //     y += 1;
                 //     x = 0;
                 // }
-            }
-
-            section += 1;
-            if section > 12 {
-                section = 0;
-                // std::thread::sleep_ms(200);
             }
         }
     }
