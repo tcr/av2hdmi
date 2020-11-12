@@ -40,7 +40,7 @@ fn main() {
 
         let sample_count: u32 = 30000;
         let sample_max = sample_count + 40;
-        let sample_loop = 20;
+        let sample_loop = 30;
 
         let PIXEL_LEN = 165;
 
