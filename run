@@ -1,3 +1,7 @@
 #!/bin/bash
 
-docker run --volume $(pwd):/home/cross/project --volume $HOME/.cargo/registry:/home/cross/.cargo/registry rust-stable-pi-cross:latest build --release && scp target/arm-unknown-linux-gnueabihf/release/fb2d pi@milkbar.local:~/ && ssh pi@milkbar.local -t "sudo ./fb2d"
+docker run --volume $(pwd):/home/cross/project \
+  --volume $HOME/.cargo/registry:/home/cross/.cargo/registry rust-stable-pi-cross:latest \
+  build --release --color=always && \
+    scp target/arm-unknown-linux-gnueabihf/release/fb2d pi@milkbar.local:~/ && \
+    ssh pi@milkbar.local -t "sudo ./fb2d"

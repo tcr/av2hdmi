@@ -1,6 +1,9 @@
+use crossbeam::channel::bounded;
+use itertools::Itertools;
+
 extern "C" {
-    fn fn_setup() -> u32;
-    fn fn_collect(dest: *mut u16);
+    fn fn_setup(nsamp: u32) -> u32;
+    fn fn_collect(nsamp: u32, dest: *mut u16);
 }
 
 fn main() {
@@ -22,7 +25,7 @@ fn main() {
         data[i] = 0;
     }
 
-    // Make everything white:
+    // Make everything red:
     for i in 0..data.len() {
         if i % 4 == 0 {
             data[i] = 0x00;
@@ -34,25 +37,38 @@ fn main() {
     }
 
     unsafe {
-        fn_setup();
 
-        let sample_count = 31870;
-        let sample_loop = 10;
+        let sample_count: u32 = 30000;
+        let sample_max = sample_count + 40;
+        let sample_loop = 20;
 
-        loop {
+        let PIXEL_LEN = 165;
 
-            // Sample DMA several times.
-            let mut raw_frame: Vec<u16> = vec![0; sample_count*sample_loop];
-            for i in 0..sample_loop {
-                fn_collect(&mut raw_frame[i * sample_count] as *mut u16);
+        let (tx, rx) = bounded(128);
+
+        // Spawn a thread for taking several ADC samples and sending them over
+        // a crossbeam channel.
+        std::thread::spawn(move || {
+            fn_setup(sample_count);
+
+            let mut raw_frame: Vec<u16> = vec![2080 << 4; (sample_max as usize)*sample_loop];
+            loop {
+                // Sample DMA several times.
+                for i in 0..sample_loop {
+                    fn_collect(sample_count, &mut raw_frame[i * (sample_max as usize)] as *mut u16);
+                }
+
+                tx.send(raw_frame.clone());
             }
+        });
 
-            // Convert raw data into frame.
-            let frame = raw_frame.iter().map(|x| (2080.0 - ((*x >> 4) as f32)) / 410.0).collect::<Vec<_>>();
+        while let Ok(raw_frame) = rx.recv() {
+            if rx.is_full() {
+                panic!("Not moving fast enough");
+            }
 
             // let mut file = File::create("out.csv").unwrap();
 
-            // let mut dt = DrawTarget::new(800, 600);
             let size = fb.get_size();
 
             let (prefix, pixels, suffix) = unsafe { data.align_to_mut::<u32>() };
@@ -64,67 +80,40 @@ fn main() {
             let mut x = 0;
             let mut y = 0;
 
-            // Make everything white:
-            for x2 in 0..166 {
-                draw_pixel(pixels, x2, y, 0x940000, size);
-            }
-
             let mut last = 0;
             let mut active = false;
-            for (i, w) in frame.chunks(WIN_LENGTH).enumerate() {
-                let a: f32 = w.iter().sum::<f32>() / (WIN_LENGTH as f32);
+            for value in raw_frame.iter()
+                // Convert raw values into voltages
+                .map(|x| (2080.0 - ((*x >> 4) as f32)) / 410.0)
+                .chunks(WIN_LENGTH)
+                .into_iter()
+                .map(|value| value.sum::<f32>()) {
+                // Average this window into a color value.
+                let color: u32 = volt_to_color(value / WIN_LENGTH as f32);
 
-                // if a < -0.1 {
-                //     last += 1;
-                // } else {
-                //     if last > 5 {
-                //         active = true;
-                        // if x > 40 {
-                        //     y += 1;
-                        // }
-                        // x = 0;
-
-                        // for xfill in 0..165 {
-                        //     draw_pixel(pixels, xfill, y, 0x221111, size);
-                        // }
-                //     }
-                //     last = 0;
-                // }
-
-                // if !active {
-                //     continue;
-                // }
-
-                // if y < 10 {
-                //     println!("{:?}", x);
-                // }
-                // }
+                // Failsafe for not SEGFAULTing when we run out of VRAM
                 if y > 100 {
                     break;
                 }
-                // last = a;
 
-                draw_pixel(pixels, x, y, volt_to_color(a), size);
+                // Draw the pixel.
+                draw_pixel(pixels, x, y, color, size);
 
-                // if i % 625 == 0 {
-                //     draw_pixel(pixels, x, y, 0x00ff00, size);
-                // }
-
-                if x < 165 {
+                // We roll over at pixel PIXEL_LEN
+                if x < PIXEL_LEN {
                     x += 1;
                 } else {
                     x = 0;
                     y += 1;
                 }
-                // if x > 165 {
-                //     y += 1;
-                //     x = 0;
-                // }
             }
         }
     }
 }
 
+/**
+ * Converts a voltage value into a ARGB color.
+ */
 fn volt_to_color(value: f32) -> u32 {
     let mut lum = (value * (0xff as f32)) as u32;
     if lum > 0xFF {
@@ -134,9 +123,10 @@ fn volt_to_color(value: f32) -> u32 {
 }
 
 fn draw_pixel(pixels: &mut [u32], x: usize, y: usize, color: u32, size: (u32, u32)) {
-    let MUL = 6;
-    for nx in x*MUL..(x+1)*MUL {
-        for ny in y*5..(y+1)*5 {
+    let XMUL = 6;
+    let YMUL  = 4;
+    for nx in x*XMUL..(x+1)*XMUL {
+        for ny in y*YMUL..(y+1)*YMUL {
             pixels[ ((12 + ny) * (size.0 as usize)) + (60 + nx)] = color;
         }
     }

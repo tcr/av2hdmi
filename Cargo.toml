@@ -10,6 +10,8 @@ build = "build.rs"
 [dependencies]
 linuxfb = "0.2.0"
 cc = "1.0.61"
+crossbeam = "0.8"
+itertools = "*"
 
 [build-dependencies]
 cc = "1.0"
