@@ -6,6 +6,8 @@ extern "C" {
     fn fn_collect(nsamp: u32, dest: *mut u16);
 }
 
+const WIN_LENGTH: usize = 16;
+
 fn main() {
     // Instead of hardcoding the path, you could also use `Framebuffer::list()`
     // to find paths to available devices.
@@ -39,62 +41,63 @@ fn main() {
     unsafe {
 
         let sample_count: u32 = 30000;
-        let sample_max = sample_count + 40;
-        let sample_loop = 30;
+        let sample_max = sample_count + 40; // 40px filler inbetween samples
+        let sample_loop = 16;
 
         let PIXEL_LEN = 165;
 
-        let (tx, rx) = bounded(128);
+        let (tx, rx) = bounded(32);
 
         // Spawn a thread for taking several ADC samples and sending them over
         // a crossbeam channel.
         std::thread::spawn(move || {
             fn_setup(sample_count);
 
-            let mut raw_frame: Vec<u16> = vec![2080 << 4; (sample_max as usize)*sample_loop];
             loop {
+                let mut raw_frame: Vec<u16> = vec![2080 << 4; (sample_max as usize)*sample_loop];
+
                 // Sample DMA several times.
                 for i in 0..sample_loop {
                     fn_collect(sample_count, &mut raw_frame[i * (sample_max as usize)] as *mut u16);
                 }
 
-                tx.send(raw_frame.clone());
+                tx.send(raw_frame);
             }
         });
 
+        let size = fb.get_size();
+
+        let (prefix, pixels, suffix) = unsafe { data.align_to_mut::<u32>() };
+        assert_eq!(prefix.len(), 0);
+        assert_eq!(suffix.len(), 0);
+
+        let mut framec = 0;
+
         while let Ok(raw_frame) = rx.recv() {
-            if rx.is_full() {
-                panic!("Not moving fast enough");
-            }
+            framec += 1;
+            // if framec == 10 {
+            //     break;
+            // }
+            // if rx.is_full() {
+            //     panic!("Not moving fast enough");
+            // }
 
             // let mut file = File::create("out.csv").unwrap();
 
-            let size = fb.get_size();
-
-            let (prefix, pixels, suffix) = unsafe { data.align_to_mut::<u32>() };
-            assert_eq!(prefix.len(), 0);
-            assert_eq!(suffix.len(), 0);
-
             // Smooth it!
-            let WIN_LENGTH = 16;
             let mut x = 0;
             let mut y = 0;
-
-            let mut last = 0;
-            let mut active = false;
             for value in raw_frame.iter()
                 // Convert raw values into voltages
-                .map(|x| (2080.0 - ((*x >> 4) as f32)) / 410.0)
+                .map(|sample| (2080 - ((*sample as i32 >> 4))))
+                // Sample windows of WIN_LENGTH
                 .chunks(WIN_LENGTH)
                 .into_iter()
-                .map(|value| value.sum::<f32>()) {
-                // Average this window into a color value.
-                let color: u32 = volt_to_color(value / WIN_LENGTH as f32);
+                // Calculate sum, then average
+                .map(|value| value.sum::<i32>()) {
 
-                // Failsafe for not SEGFAULTing when we run out of VRAM
-                if y > 100 {
-                    break;
-                }
+                // Average this window into a color value.
+                let color: u32 = volt_to_color(value  as f32);
 
                 // Draw the pixel.
                 draw_pixel(pixels, x, y, color, size);
@@ -107,6 +110,12 @@ fn main() {
                     y += 1;
                 }
             }
+
+            // std::fs::write("./frame-out", &std::slice::from_raw_parts(raw_frame.as_ptr() as *const u8, raw_frame.len() * 2));
+
+            // break;
+
+            // std::thread::sleep_ms(100);
         }
     }
 }
@@ -115,7 +124,7 @@ fn main() {
  * Converts a voltage value into a ARGB color.
  */
 fn volt_to_color(value: f32) -> u32 {
-    let mut lum = (value * (0xff as f32)) as u32;
+    let mut lum = (value / 410.0 / (WIN_LENGTH as f32) * (0xff as f32)) as u32;
     if lum > 0xFF {
         lum = 0xFF;
     }
@@ -124,7 +133,7 @@ fn volt_to_color(value: f32) -> u32 {
 
 fn draw_pixel(pixels: &mut [u32], x: usize, y: usize, color: u32, size: (u32, u32)) {
     let XMUL = 6;
-    let YMUL  = 4;
+    let YMUL = 3;
     for nx in x*XMUL..(x+1)*XMUL {
         for ny in y*YMUL..(y+1)*YMUL {
             pixels[ ((12 + ny) * (size.0 as usize)) + (60 + nx)] = color;
