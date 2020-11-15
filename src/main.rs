@@ -102,16 +102,22 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsage::INDEX,
         });
 
-        let red_texture_data = [255, 0, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255];
+        // let red_texture_data = [255, 0, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255];
+        // let size = wgpu::Extent3d {
+        //     width: 2,
+        //     height: 2,
+        //     depth: 1,
+        // };
+
+        let mut frame_out: Vec<u16> = vec![];
+        let mut file = File::open("./frame-out").unwrap();
+        file.read_i16_into::<NativeEndian>(&mut frame_out[..]).unwrap();
+
         let size = wgpu::Extent3d {
-            width: 2,
-            height: 2,
+            width: 165,
+            height: frame_out.len() / 165,
             depth: 1,
         };
-
-        let mut frame_out = vec![];
-        let mut file = File::open("./frame-out").unwrap();
-        file.read_u16_into::<NativeEndian>(&mut frame_out[..]).unwrap();
 
         let texture_descriptor = wgpu::TextureDescriptor {
             size,
