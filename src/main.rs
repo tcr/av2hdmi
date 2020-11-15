@@ -26,46 +26,26 @@ fn create_vertices() -> Vec<Vertex> {
         // left rectangle
         vertex([-1, -1], [0, 1], 0),
         vertex([-1, 1], [0, 0], 0),
-        vertex([0, 1], [1, 0], 0),
-        vertex([0, -1], [1, 1], 0),
-        // right rectangle
-        vertex([0, -1], [0, 1], 1),
-        vertex([0, 1], [0, 0], 1),
-        vertex([1, 1], [1, 0], 1),
-        vertex([1, -1], [1, 1], 1),
+        vertex([1, 1], [1, 0], 0),
+        vertex([1, -1], [1, 1], 0),
     ]
 }
 
+const FRAGMENT_COUNT: u32 = 1;
 fn create_indices() -> Vec<u16> {
     vec![
         // Left rectangle
         0, 1, 2, // 1st
         2, 0, 3, // 2nd
-        // Right rectangle
-        4, 5, 6, // 1st
-        6, 4, 7, // 2nd
     ]
 }
 
-#[derive(Copy, Clone)]
-enum Color {
-    RED,
-    GREEN,
-}
-
-fn create_texture_data(color: Color) -> [u8; 8] {
-    match color {
-        Color::RED => [255, 0, 0, 255, 0, 255, 0, 255],
-        Color::GREEN => [0, 255, 0, 255, 0, 255, 0, 255],
-    }
-}
 
 struct Example {
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
-    uniform_workaround: bool,
 }
 
 impl framework::Example for Example {
@@ -89,7 +69,6 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let uniform_workaround = false;
         let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
         let fs_source = // match device.features() {
             // f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
@@ -97,10 +76,6 @@ impl framework::Example for Example {
             // }
             // f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
             //     wgpu::include_spirv!("non-uniform.frag.spv")
-            // }
-            // f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
-            //     uniform_workaround = true;
-            //     wgpu::include_spirv!("uniform.frag.spv")
             // }
             // f if f.contains(wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY) => {
                 wgpu::include_spirv!("constant.frag.spv")
@@ -125,11 +100,9 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsage::INDEX,
         });
 
-        let red_texture_data = create_texture_data(Color::RED);
-        let green_texture_data = create_texture_data(Color::GREEN);
-
+        let red_texture_data = [255, 0, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255];
         let size = wgpu::Extent3d {
-            width: 1,
+            width: 2,
             height: 2,
             depth: 1,
         };
@@ -147,13 +120,8 @@ impl framework::Example for Example {
             label: Some("red"),
             ..texture_descriptor
         });
-        let green_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("green"),
-            ..texture_descriptor
-        });
 
         let red_texture_view = red_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let green_texture_view = green_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         queue.write_texture(
             wgpu::TextureCopyView {
@@ -164,22 +132,8 @@ impl framework::Example for Example {
             &red_texture_data,
             wgpu::TextureDataLayout {
                 offset: 0,
-                bytes_per_row: 4,
-                rows_per_image: 2,
-            },
-            size,
-        );
-        queue.write_texture(
-            wgpu::TextureCopyView {
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                texture: &green_texture,
-            },
-            &green_texture_data,
-            wgpu::TextureDataLayout {
-                offset: 0,
-                bytes_per_row: 4,
-                rows_per_image: 2,
+                bytes_per_row: 4*size.width,
+                rows_per_image: size.height,
             },
             size,
         );
@@ -197,7 +151,7 @@ impl framework::Example for Example {
                         dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
                     },
-                    count: std::num::NonZeroU32::new(2),
+                    count: std::num::NonZeroU32::new(FRAGMENT_COUNT),
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
@@ -214,7 +168,6 @@ impl framework::Example for Example {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureViewArray(&[
                         red_texture_view,
-                        green_texture_view,
                     ]),
                 },
                 wgpu::BindGroupEntry {
@@ -229,14 +182,7 @@ impl framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: if uniform_workaround {
-                &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStage::FRAGMENT,
-                    range: 0..4,
-                }]
-            } else {
-                &[]
-            },
+            push_constant_ranges: &[],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -276,7 +222,6 @@ impl framework::Example for Example {
             index_buffer,
             bind_group,
             pipeline,
-            uniform_workaround,
         }
     }
     fn resize(
@@ -317,14 +262,7 @@ impl framework::Example for Example {
         rpass.set_bind_group(0, &self.bind_group, &[]);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..));
-        if self.uniform_workaround {
-            rpass.set_push_constants(wgpu::ShaderStage::FRAGMENT, 0, bytemuck::cast_slice(&[0]));
-            rpass.draw_indexed(0..6, 0, 0..1);
-            rpass.set_push_constants(wgpu::ShaderStage::FRAGMENT, 0, bytemuck::cast_slice(&[1]));
-            rpass.draw_indexed(6..12, 0, 0..1);
-        } else {
-            rpass.draw_indexed(0..12, 0, 0..1);
-        }
+        rpass.draw_indexed(0..(6*FRAGMENT_COUNT), 0, 0..1);
 
         drop(rpass);
 
