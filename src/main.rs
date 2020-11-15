@@ -55,7 +55,7 @@ enum Color {
 
 fn create_texture_data(color: Color) -> [u8; 4] {
     match color {
-        Color::RED => [255, 0, 0, 255],
+        Color::RED => [255, 0, 0, 255, 0, 255, 0, 255],
         Color::GREEN => [0, 255, 0, 255],
     }
 }
