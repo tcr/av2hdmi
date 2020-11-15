@@ -9,9 +9,15 @@ layout(set = 0, binding = 1) uniform sampler u_Sampler;
 
 void main() {
     if (v_Index == 0) {
-        o_Color = vec4(texture(sampler2D(u_Textures[0], u_Sampler), v_TexCoord).rgb, 1.0);
+        vec3 color = texture(sampler2D(u_Textures[0], u_Sampler), v_TexCoord).rgb;
+        o_Color = vec4(mix(
+            color,
+            vec3( dot( color , vec3( 0.2126 , 0.7152 , 0.0722 ) ) ),
+            0.5
+        ), 1.0);
     } else if (v_Index == 1) {
-        o_Color = vec4(texture(sampler2D(u_Textures[1], u_Sampler), v_TexCoord).rgb, 1.0);
+        vec3 color = texture(sampler2D(u_Textures[1], u_Sampler), v_TexCoord).rgb;
+        o_Color = vec4(color, 1.0);
     } else {
         // We need to write something to output color
         o_Color = vec4(0.0, 0.0, 1.0, 0.0);

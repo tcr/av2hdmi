@@ -53,10 +53,10 @@ enum Color {
     GREEN,
 }
 
-fn create_texture_data(color: Color) -> [u8; 4] {
+fn create_texture_data(color: Color) -> [u8; 8] {
     match color {
         Color::RED => [255, 0, 0, 255, 0, 255, 0, 255],
-        Color::GREEN => [0, 255, 0, 255],
+        Color::GREEN => [0, 255, 0, 255, 0, 255, 0, 255],
     }
 }
 
@@ -89,24 +89,25 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let mut uniform_workaround = false;
+        let uniform_workaround = false;
         let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
-        let fs_source = match device.features() {
-            f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
-                wgpu::include_spirv!("unsized-non-uniform.frag.spv")
-            }
-            f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
-                wgpu::include_spirv!("non-uniform.frag.spv")
-            }
-            f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
-                uniform_workaround = true;
-                wgpu::include_spirv!("uniform.frag.spv")
-            }
-            f if f.contains(wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY) => {
+        let fs_source = // match device.features() {
+            // f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
+            //     wgpu::include_spirv!("unsized-non-uniform.frag.spv")
+            // }
+            // f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
+            //     wgpu::include_spirv!("non-uniform.frag.spv")
+            // }
+            // f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
+            //     uniform_workaround = true;
+            //     wgpu::include_spirv!("uniform.frag.spv")
+            // }
+            // f if f.contains(wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY) => {
                 wgpu::include_spirv!("constant.frag.spv")
-            }
-            _ => unreachable!(),
-        };
+        //     }
+        //     _ => unreachable!(),
+        // };
+        ;
         let fs_module = device.create_shader_module(fs_source);
 
         let vertex_size = std::mem::size_of::<Vertex>();
@@ -127,12 +128,14 @@ impl framework::Example for Example {
         let red_texture_data = create_texture_data(Color::RED);
         let green_texture_data = create_texture_data(Color::GREEN);
 
+        let size = wgpu::Extent3d {
+            width: 1,
+            height: 2,
+            depth: 1,
+        };
+
         let texture_descriptor = wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -162,13 +165,9 @@ impl framework::Example for Example {
             wgpu::TextureDataLayout {
                 offset: 0,
                 bytes_per_row: 4,
-                rows_per_image: 0,
+                rows_per_image: 2,
             },
-            wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
+            size,
         );
         queue.write_texture(
             wgpu::TextureCopyView {
@@ -180,13 +179,9 @@ impl framework::Example for Example {
             wgpu::TextureDataLayout {
                 offset: 0,
                 bytes_per_row: 4,
-                rows_per_image: 0,
+                rows_per_image: 2,
             },
-            wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
+            size,
         );
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
