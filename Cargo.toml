@@ -15,6 +15,7 @@ futures = { version = "0.3", default-features = false, features = ["std"] }
 winit = { version = "0.23.0", features = ["web-sys"] }
 
 log = "0.4"
+byteorder="*"
 
 cgmath = "0.17"
 

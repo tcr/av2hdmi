@@ -4,6 +4,8 @@ mod framework;
 use bytemuck::{Pod, Zeroable};
 
 use wgpu::util::DeviceExt;
+use std::fs::File;
+use byteorder::{ReadBytesExt, NativeEndian};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -106,6 +108,10 @@ impl framework::Example for Example {
             height: 2,
             depth: 1,
         };
+
+        let mut frame_out = vec![];
+        let mut file = File::open("./frame-out").unwrap();
+        file.read_u16_into::<NativeEndian>(&mut frame_out[..]).unwrap();
 
         let texture_descriptor = wgpu::TextureDescriptor {
             size,
