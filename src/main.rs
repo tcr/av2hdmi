@@ -5,7 +5,10 @@ use bytemuck::{Pod, Zeroable};
 
 use wgpu::util::DeviceExt;
 use std::fs::File;
-use byteorder::{ReadBytesExt, NativeEndian};
+use std::path::Path;
+use std::io::BufWriter;
+use png::HasParameters;
+use byteorder::{ReadBytesExt, NativeEndian, LittleEndian, BigEndian};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -103,19 +106,62 @@ impl framework::Example for Example {
         });
 
         // let red_texture_data = [255, 0, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 255, 0, 0, 255];
+        // let bytes_per_row = 4;
         // let size = wgpu::Extent3d {
         //     width: 2,
         //     height: 2,
         //     depth: 1,
         // };
 
-        let mut frame_out: Vec<u16> = vec![];
-        let mut file = File::open("./frame-out").unwrap();
-        file.read_i16_into::<NativeEndian>(&mut frame_out[..]).unwrap();
+        let dim_height = 180;
+        let dim_width = 166;
+        let dim_full_width = 2654;
+        let bytes_per_row = 2;
 
+        let mut file = File::open("./frame-out").unwrap();
+        let mut frame_out: Vec<i16> = vec![0; dim_full_width * dim_height]; //file.metadata().unwrap().len() as usize/2];
+        file.read_i16_into::<NativeEndian>(&mut frame_out[0..(dim_full_width * dim_height)]).unwrap();
+
+        {
+            let path = Path::new(r"frame.png");
+            let file = File::create(path).unwrap();
+            let ref mut w = BufWriter::new(file);
+
+            let mut encoder = png::Encoder::new(w, dim_full_width as u32, dim_height as u32); // Width is 2 pixels and height is 1.
+            encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+
+            let data = {
+                frame_out.iter().map(|x| {
+                    let color = (((2080.0 - ((*x >> 4) as f32)) / 410.0) * 255.0);
+                    // println!("color: {:?}", color);
+                    return vec![color as u8, color as u8, color as u8, 255];
+                }).flatten().collect::<Vec<_>>()
+            };
+            writer.write_image_data(&data).unwrap(); // Save
+        }
+
+        // let mut fake_frame: Vec<u8> = vec![];
+        // for y in 0..182 {
+        //     for x in 0..165 {
+        //         for i in 0..16 {
+        //             fake_frame.extend(&[y]);
+        //         }
+        //     }
+        // }
+
+        // panic!("file: {:?}", frame_out.len());
+        let red_texture_data = unsafe {
+            &std::slice::from_raw_parts(frame_out.as_ptr() as *const u8, frame_out.len() * (bytes_per_row as usize))
+        };
+
+        // let frame_out_trunc = frame_out[0..(165 * 16 * 182)].to_vec();
+        // println!("----> len {:?}", frame_out.len() as f32 / (165.0 * 16.0));
+
+        // TODO correct this extent data
         let size = wgpu::Extent3d {
-            width: 165,
-            height: frame_out.len() / 165,
+            width: dim_full_width as u32,
+            height: dim_height as u32,
             depth: 1,
         };
 
@@ -124,7 +170,7 @@ impl framework::Example for Example {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::R16Uint,
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
             label: None,
         };
@@ -142,9 +188,10 @@ impl framework::Example for Example {
                 texture: &red_texture,
             },
             &red_texture_data,
+            // &frame_out,
             wgpu::TextureDataLayout {
                 offset: 0,
-                bytes_per_row: 4*size.width,
+                bytes_per_row: bytes_per_row*size.width,
                 rows_per_image: size.height,
             },
             size,
@@ -159,7 +206,7 @@ impl framework::Example for Example {
                     binding: 0,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::SampledTexture {
-                        component_type: wgpu::TextureComponentType::Float,
+                        component_type: wgpu::TextureComponentType::Uint,
                         dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
                     },

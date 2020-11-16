@@ -7,16 +7,13 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
+png = "0.11"
 bytemuck = { version = "1.4", features = ["derive"] }
 wgpu = "0.6"
-
 futures = { version = "0.3", default-features = false, features = ["std"] }
 winit = { version = "0.23.0", features = ["web-sys"] }
-
 log = "0.4"
 byteorder="*"
-
 cgmath = "0.17"
 
 
