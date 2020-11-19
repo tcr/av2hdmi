@@ -15,7 +15,10 @@ winit = { version = "0.23.0", features = ["web-sys"] }
 log = "0.4"
 byteorder="*"
 cgmath = "0.17"
-
+num = "0.3"
+microfft = "0.3"
+num-complex = { version = "0.2", features = ["std"]}
+biquad = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.subscriber]
 package = "wgpu-subscriber"

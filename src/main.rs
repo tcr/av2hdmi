@@ -45,6 +45,9 @@ fn create_indices() -> Vec<u16> {
     ]
 }
 
+fn volt_decode(input: u16) -> f32 {
+    ((((2080 - ((input >> 4) as i16)) as f32) / 410.0) * 300.0) as f32
+}
 
 struct Example {
     pipeline: wgpu::RenderPipeline,
@@ -123,19 +126,59 @@ impl framework::Example for Example {
         file.read_i16_into::<NativeEndian>(&mut frame_out[0..(dim_full_width * dim_height)]).unwrap();
 
         {
+            use std::io::Write;
+            let mut file = File::create("./out.csv").unwrap();
+
+            let smoothing = 16.0;
+            let mut value = frame_out[0] as f32;
+            for i in 0..dim_full_width*5 {
+                // value += ((frame_out[i] as f32) - value) / smoothing;
+                writeln!(file, "{}", volt_decode(frame_out[i] as u16));
+            }
+        }
+
+        if true {
+            let png_line_height = 8;
             let path = Path::new(r"frame.png");
             let file = File::create(path).unwrap();
             let ref mut w = BufWriter::new(file);
 
-            let mut encoder = png::Encoder::new(w, dim_full_width as u32, dim_height as u32); // Width is 2 pixels and height is 1.
+            let mut encoder = png::Encoder::new(w, dim_width as u32, dim_height as u32); // Width is 2 pixels and height is 1.
             encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
             let mut writer = encoder.write_header().unwrap();
 
             let data = {
-                frame_out.iter().map(|x| {
-                    let color = (((2080.0 - ((*x >> 4) as f32)) / 410.0) * 255.0);
-                    // println!("color: {:?}", color);
-                    return vec![color as u8, color as u8, color as u8, 255];
+                frame_out.chunks(dim_full_width).enumerate().map(|(x_i, x)| {
+                    let mut y_i = 0;
+                    return x
+                        .chunks(16)
+                        .map(move |y| {
+                            let sample = y.iter().map(|s| {
+                                volt_decode(*s as u16)
+                            }).collect::<Vec<f32>>();
+
+                            let mut color = sample.iter().sum::<f32>() / 16.0;
+                            if color > 255.0 {
+                                color = 0.0;
+                            }
+
+                            let mut fft_sample = sample.clone();
+                            if fft_sample.len() == 16 && x_i == 1 && y_i < 24 {
+                                println!("--[x]> {:?} == {:?}", y_i, color);
+                                y_i += 1;
+                                println!("--[s]> {:?}", sample);
+                                let spectrum = microfft::real::rfft_16(&mut fft_sample[..]);
+                                let amplitudes: Vec<_> = spectrum.iter().map(|c| c.norm()).collect();
+                                println!("--[a]> {:?}", amplitudes);
+                                let phases: Vec<_> = spectrum.iter().map(|c| c.arg()).collect();
+                                println!("-----> {:?}", phases);
+                                println!();
+                            }
+
+                            // println!("---> {} from {}", color, 2080 - (*y >> 4));
+                            return vec![color as u8, color as u8, color as u8, 255];
+                        })
+                        .flatten();
                 }).flatten().collect::<Vec<_>>()
             };
             writer.write_image_data(&data).unwrap(); // Save
@@ -174,6 +217,7 @@ impl framework::Example for Example {
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
             label: None,
         };
+
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("red"),
             ..texture_descriptor
