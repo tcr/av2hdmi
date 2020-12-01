@@ -421,7 +421,7 @@ impl framework::Example for Example {
                                 .sum::<f32>() / (chunk_width as f32);
                             let q_sample = samples.iter()
                                 .enumerate()
-                                .map(|(i, x)| x * carrier_freq(i + chunk_index).sin() * 4.)
+                                .map(|(i, x)| x * carrier_freq(i + chunk_index).cos() * 4.)
                                 .sum::<f32>() / (chunk_width as f32);
 
                             let y_clamped = num::clamp(y_sample, 0., 200.) / 200.;
