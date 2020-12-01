@@ -130,7 +130,7 @@ impl framework::Example for Example {
 
 
         fn carrier_freq(x: usize) -> f32 {
-            (x as f32 + 4.8) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
+            (x as f32 + 4.6) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
         }
 
         fn vec_avg(v: &std::collections::VecDeque<f32>) -> f32 {
@@ -409,6 +409,8 @@ impl framework::Example for Example {
                         //     i_rise += 1;
                         // }
 
+                        // TODO hoist this rotation to a running average
+                        // on the array pre-windowing
                         samples_vec.rotate_left(i_rise);
 
                         samples_vec.rotate_right(22);
