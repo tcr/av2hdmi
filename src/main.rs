@@ -368,18 +368,37 @@ impl framework::Example for Example {
             let chunk_width = 12;
             let data = {
                 frame_out
-                    .chunks(dim_full_width).map(|x| {
-                    return x
-                        .chunks(chunk_width)
-                        .enumerate()
-                        .map(move |(chunk_i, y)| {
-                            let chunk_index = chunk_i * chunk_width;
+                    .chunks(dim_full_width)
+                    .enumerate()
+                    .map(|(line_i, x)| {
+                        let samples_vec = x
+                            .chunks(chunk_width)
+                            .enumerate()
+                            .map(move |(chunk_i, y)| {
+                                let mut chunk_index = chunk_i * chunk_width;
 
-                            let samples = y.iter().map(|s| {
-                                volt_decode(*s as u16)
+                                // [HACK] Try to force consistent colors
+                                if line_i > 11 {
+                                    chunk_index += 5;
+                                } else if line_i > 22 {
+                                    chunk_index -= 1;
+                                }
+
+                                (chunk_i, chunk_index, y.iter().map(|s| {
+                                    volt_decode(*s as u16)
+                                }).collect::<Vec<_>>())
                             }).collect::<Vec<_>>();
 
-                            let y_sample = samples.iter().sum::<f32>() / (chunk_width as f32);
+                        // Find the inline carrier signal.
+                        let i = samples_vec.iter().position(|(chunk_i, chunk_index, samples)| {
+                            println!("{:?}", chunk_i);
+                            false
+                        });
+
+                        // Convert to RGB values.
+                        return samples_vec.clone().into_iter().map(|(chunk_i, chunk_index, samples)| {
+                            // Calculate YIQ against carrier frequency.
+                            let sample = samples.iter().sum::<f32>() / (chunk_width as f32);
                             let i_sample = samples.iter()
                                 .enumerate()
                                 .map(|(i, x)| x * carrier_freq(i + chunk_index).sin() * 4.)
@@ -389,10 +408,14 @@ impl framework::Example for Example {
                                 .map(|(i, x)| x * carrier_freq(i + chunk_index).sin() * 4.)
                                 .sum::<f32>() / (chunk_width as f32);
 
-                            let y_clamped = num::clamp(y_sample, 0., 200.) / 200.;
+                            let y_clamped = num::clamp(sample, 0., 200.) / 200.;
                             let i_clamped = num::clamp(i_sample, -60., 60.) / 60.;
                             let q_clamped = num::clamp(q_sample, -60., 60.) / 60.;
-                            println!("{:?}", (y_clamped, i_clamped, q_clamped));
+                            // println!("{:?}", (y_clamped, i_clamped, q_clamped));
+
+                            if sample < 0. {
+                                println!("---> {:?} ==> {:?}", chunk_i, sample);
+                            }
 
                             // let matrix = ndarray::arr1(&[y_sample, i_clamped, q_clamped]);
                             // let con_matrix = ndarray::arr2(&[
@@ -403,10 +426,10 @@ impl framework::Example for Example {
                             // let rgb_matrix = matrix.dot(&con_matrix);
                             // println!("{:?}", rgb_matrix);
 
-                            let r = y_clamped + (0.9563 * i_clamped) + (0.6210 * q_clamped);
+                            let r = y_clamped + (0.9563 * i_clamped) + (0.4210 * q_clamped);
                             let g = y_clamped - (0.2721 * i_clamped) - (0.6474 * q_clamped);
                             let b = y_clamped - (1.1070 * i_clamped) + (1.7046 * q_clamped);
-                            println!("    rgb -----> {:?}", (r, g, b));
+                            // println!("    rgb -----> {:?}", (r, g, b));
                             let r_ = r * 255.;
                             let g_ = g * 255.;
                             let b_ = b * 255.;
