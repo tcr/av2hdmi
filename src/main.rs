@@ -9,6 +9,9 @@ use std::path::Path;
 use std::io::BufWriter;
 use png::HasParameters;
 use byteorder::{ReadBytesExt, NativeEndian, LittleEndian, BigEndian};
+use rustfft::num_complex::Complex;
+use rustfft::num_traits::Zero;
+use rustfft::FFTplanner;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -125,20 +128,233 @@ impl framework::Example for Example {
         let mut frame_out: Vec<i16> = vec![0; dim_full_width * dim_height]; //file.metadata().unwrap().len() as usize/2];
         file.read_i16_into::<NativeEndian>(&mut frame_out[0..(dim_full_width * dim_height)]).unwrap();
 
+        // Do some charts with a sample the first five scanlines.
         {
             use std::io::Write;
-            let mut file = File::create("./out.csv").unwrap();
 
-            let smoothing = 16.0;
-            let mut value = frame_out[0] as f32;
-            for i in 0..dim_full_width*5 {
-                // value += ((frame_out[i] as f32) - value) / smoothing;
-                writeln!(file, "{}", volt_decode(frame_out[i] as u16));
+            // Create out.csv, which is the low-pass filtered signal.
+            let mut file = File::create("./out.csv").unwrap();
+            let mut bandpass = vec![];
+            let win_len = 32;
+            for samp in frame_out[0..dim_full_width*5]
+                .windows(win_len)
+                .enumerate()
+                .map(|(w_i, w)| {
+
+                    // compute the RFFT of the samples
+                    // println!("samps> {:?}", samples);
+                    // let spectrum = microfft::real::rfft_16(&mut samples);
+
+                    // // the spectrum has a spike at index `signal_freq`
+                    // let amplitudes: Vec<_> = spectrum.iter().map(|c| c.norm() as u32).collect();
+                    // // assert_eq!(&amplitudes, &[0, 0, 0, 8, 0, 0, 0, 0]);
+                    // println!("amps> {:?}", amplitudes);
+                    // let args: Vec<_> = spectrum.iter().map(|c| c.arg() as u32).collect();
+                    // // assert_eq!(&amplitudes, &[0, 0, 0, 8, 0, 0, 0, 0]);
+                    // println!("args> {:?}", args);
+                    // println!();
+
+
+                    let mut samples_real = w.iter().map(|y| {
+                        Complex::new(volt_decode(*y as u16) as f64 + 100.0, 0.0)
+                    }).collect::<Vec<_>>();
+                    let mut samples = samples_real.clone();
+
+                    // For fake data
+                    // let mut samples_real = w.iter().map(|y| {
+                    //     let a = 20.0 * (((w_i as f64) + 4.8)/(41.66/(3.58 * 2.0 * std::f64::consts::PI))).sin();
+                    //     Complex::new(a, 0.0)
+                    // }).collect::<Vec<_>>();
+                    // let mut samples = samples_real.clone();
+
+                    // let mut indata = vec![0.0f64; 256];
+                    let mut spectrum: Vec<Complex<f64>> = vec![Complex::zero(); win_len];
+                    let mut outdata: Vec<Complex<f64>> = vec![Complex::zero(); win_len];
+
+                    let mut planner = FFTplanner::new(false);
+                    let fft = planner.plan_fft(win_len);
+                    fft.process(&mut samples, &mut spectrum);
+
+                    // spectrum[0] = Complex::zero();
+                    // spectrum[1] = Complex::zero();
+                    for l in 5..win_len {
+                        spectrum[l] = Complex::zero();
+                    }
+                    //create an FFT and forward transform the input data
+                    // let mut r2c = RealToComplex::<f64>::new(16).unwrap();
+                    // r2c.process(&mut samples, &mut spectrum[..]).unwrap();
+
+                    // println!("spectrum; {:?}", spectrum);
+                    // println!("samps> {:?}", samples_real.iter().map(|x| x.norm()).collect::<Vec<_>>());
+                    // println!("spec> {:?}", spectrum.iter().map(|x| x.norm()).collect::<Vec<_>>()[4]);
+                    // println!("args> {:?}", spectrum.iter().map(|x| x.arg()).collect::<Vec<_>>()[4]);
+
+
+                    // create an iFFT and inverse transform the spectum
+                    let mut planner_i = FFTplanner::<f64>::new(true);
+                    let fft_i = planner.plan_fft(win_len);
+                    fft_i.process(&mut spectrum, &mut outdata);
+                    // println!("samp2> {:?}", outdata.iter().map(|x| x.norm()/(win_len as f64)).collect::<Vec<_>>());
+                    // println!();
+
+                    // let spectrum = microfft::real::rfft_16(&mut samps[..]);
+                    // let amplitudes: Vec<_> = spectrum.iter().map(|c| c.norm()).collect();
+                    // println!("--[a]> {:?}", amplitudes);
+                    // let phases: Vec<_> = spectrum.iter().map(|c| c.arg()).collect();
+                    // println!("-----> {:?}", phases);
+                    // println!();
+                    // }
+
+                    let segments = false;
+                    if segments {
+                        if w_i % win_len == (win_len / 2) {
+                            outdata.iter().map(|x| (x.norm() / (win_len as f64)) as f32).collect::<Vec<_>>()
+                        } else {
+                            vec![]
+                        }
+                    } else {
+                        vec![
+                            ((outdata[win_len / 2].norm() / (win_len as f64)) as f32) - 100.0,
+                        ]
+                    }
+                }).flatten() {
+                bandpass.push(samp);
+                writeln!(file, "{}", samp);
             }
+
+            fn carrier_freq(x: usize) -> f32 {
+                (x as f32 + 4.8) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
+            }
+
+            fn vec_avg(v: &std::collections::VecDeque<f32>) -> f32 {
+                v.into_iter().sum::<f32>() / v.len() as f32
+            }
+
+
+            let sample_subset = frame_out[0..dim_full_width*5].iter()
+                .map(|x| volt_decode(*x as u16))
+                .collect::<Vec<_>>();
+
+            // Create out-sine.csv, which is a sine wave at the carrier frequency.
+            let mut file = File::create("./out-sine.csv").unwrap();
+            for (i, samp) in sample_subset.iter().enumerate() {
+                writeln!(file, "{}", 20.0 * carrier_freq(i).sin()).ok();
+            }
+
+            // Create out-Y.csv
+            let mut avg = std::collections::VecDeque::new();
+            let mut y_out = vec![];
+            for (i, samp) in sample_subset.iter().enumerate() {
+                avg.push_front(*samp);
+                if avg.len() > 12 { // TODO make this 20
+                    avg.pop_back();
+                }
+                let mut res = vec_avg(&avg);
+                if res < -100. {
+                    res = -100.
+                }
+                y_out.push(res);
+            }
+            // Write out file.
+            let mut file = File::create("./out-Y.csv").unwrap();
+            for samp in &y_out {
+                writeln!(file, "{}", samp).ok();
+            }
+
+            // Create out-I.csv
+            let mut avg = std::collections::VecDeque::new();
+            let mut i_out = vec![];
+            for (i, samp) in sample_subset.iter().enumerate() {
+                avg.push_front(samp * carrier_freq(i).sin() * 4.);
+                if avg.len() > 12 {
+                    avg.pop_back();
+                }
+                let mut res = vec_avg(&avg);
+                if res < -100. {
+                    res = -100.
+                }
+                i_out.push(res);
+            }
+            // Write out file.
+            let mut file = File::create("./out-I.csv").unwrap();
+            for samp in &i_out {
+                writeln!(file, "{}", samp).ok();
+            }
+
+            // Create out-Q.csv
+            let mut avg = std::collections::VecDeque::<f32>::new();
+            let mut q_out = vec![];
+            for (i, samp) in bandpass.iter().enumerate() {
+                avg.push_front(samp * carrier_freq(i).cos() * 4.);
+                if avg.len() > 12 {
+                    avg.pop_back();
+                }
+                let mut res = vec_avg(&avg);
+                if res < -100. {
+                    res = -100.
+                }
+                q_out.push(res);
+            }
+            // Write out file.
+            let mut file = File::create("./out-Q.csv").unwrap();
+            for samp in &q_out {
+                writeln!(file, "{}", samp).ok();
+            }
+
+            // Bail from the 2D render.
+            // if true {
+            //     panic!("done");
+            // }
+
+            // let _ = bandpass
+            //     .windows(win_len)
+            //     .enumerate()
+            //     .map(|(w_i, w)| {
+            //         let mut samples_real = w.iter().map(|y| {
+            //             // TODO don't volt_decode wtf
+            //             Complex::new(*y as f64, 0.0)
+            //         }).collect::<Vec<_>>();
+            //         let mut samples = samples_real.clone();
+
+            //         // let mut indata = vec![0.0f64; 256];
+            //         let mut spectrum: Vec<Complex<f64>> = vec![Complex::zero(); win_len];
+            //         let mut outdata: Vec<Complex<f64>> = vec![Complex::zero(); win_len];
+
+            //         let mut planner = FFTplanner::new(false);
+            //         let fft = planner.plan_fft(win_len);
+            //         fft.process(&mut samples, &mut spectrum);
+
+            //         println!("spectrum; {:?}", &spectrum[2..5]);
+
+
+            //         // For fake data
+            //         let mut samples_real = w.iter().map(|y| {
+            //             let a = 20.0 * (((w_i as f64) + *y as f64 + 4.8)/(41.66/(3.58 * 2.0 * std::f64::consts::PI))).sin();
+            //             Complex::new(a, 0.0)
+            //         }).collect::<Vec<_>>();
+            //         let mut samples = samples_real.clone();
+
+            //         // let mut indata = vec![0.0f64; 256];
+            //         let mut spectrum: Vec<Complex<f64>> = vec![Complex::zero(); win_len];
+            //         let mut outdata: Vec<Complex<f64>> = vec![Complex::zero(); win_len];
+
+            //         let mut planner = FFTplanner::new(false);
+            //         let fft = planner.plan_fft(win_len);
+            //         fft.process(&mut samples, &mut spectrum);
+
+            //         println!("comparison; {:?}", &spectrum[2..5]);
+
+            //         println!();
+            //     })
+            //     .collect::<Vec<_>>();
+
+            // for i in 0..dim_full_width*5 {
+            //     // value += ((frame_out[i] as f32) - value) / smoothing;
+            //     writeln!(file, "{}", volt_decode(frame_out[i] as u16));
+            // }
         }
 
         if true {
-            let png_line_height = 8;
             let path = Path::new(r"frame.png");
             let file = File::create(path).unwrap();
             let ref mut w = BufWriter::new(file);
@@ -147,32 +363,21 @@ impl framework::Example for Example {
             encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
             let mut writer = encoder.write_header().unwrap();
 
+            // Enumerate over frame chunks.
+            let chunk_width = 12;
             let data = {
-                frame_out.chunks(dim_full_width).enumerate().map(|(x_i, x)| {
-                    let mut y_i = 0;
+                frame_out
+                    .chunks(dim_full_width).map(|x| {
                     return x
-                        .chunks(16)
+                        .chunks(chunk_width)
                         .map(move |y| {
                             let sample = y.iter().map(|s| {
                                 volt_decode(*s as u16)
-                            }).collect::<Vec<f32>>();
+                            }).sum::<f32>() / (chunk_width as f32);
 
-                            let mut color = sample.iter().sum::<f32>() / 16.0;
+                            let mut color = sample;
                             if color > 255.0 {
                                 color = 0.0;
-                            }
-
-                            let mut fft_sample = sample.clone();
-                            if fft_sample.len() == 16 && x_i == 1 && y_i < 24 {
-                                println!("--[x]> {:?} == {:?}", y_i, color);
-                                y_i += 1;
-                                println!("--[s]> {:?}", sample);
-                                let spectrum = microfft::real::rfft_16(&mut fft_sample[..]);
-                                let amplitudes: Vec<_> = spectrum.iter().map(|c| c.norm()).collect();
-                                println!("--[a]> {:?}", amplitudes);
-                                let phases: Vec<_> = spectrum.iter().map(|c| c.arg()).collect();
-                                println!("-----> {:?}", phases);
-                                println!();
                             }
 
                             // println!("---> {} from {}", color, 2080 - (*y >> 4));
