@@ -381,7 +381,7 @@ impl framework::Example for Example {
                         // Find the inline carrier signal.
                         let i_fall = samples_vec.iter().find_map(|(chunk_i, samples)| {
                             let sample = samples.iter().sum::<f32>() / (chunk_width as f32);
-                            if sample < 0. {
+                            if sample < -10. {
                                 Some(chunk_i)
                             } else {
                                 None
@@ -399,17 +399,17 @@ impl framework::Example for Example {
                             }
                         }).unwrap_or(0);
 
-                        if i_rise < 5 {
-                            i_rise += samples_vec.len();
-                        }
-                        i_rise -= 5;
+                        // if i_rise < 5 {
+                        //     i_rise += samples_vec.len();
+                        // }
+                        // i_rise -= 5;
 
-                        // [HACK] for rendering, fix the offset values
-                        if line_i > 45 {
-                            // no op
-                        } else if line_i > 33 {
-                            i_rise -= 15;
-                        }
+                        // // [HACK] for rendering, fix the offset values
+                        // if line_i > 45 {
+                        //     // no op
+                        // } else if line_i > 33 {
+                        //     i_rise -= 15;
+                        // }
 
                         samples_vec.rotate_left(i_rise);
 
