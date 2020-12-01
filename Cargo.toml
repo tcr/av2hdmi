@@ -23,6 +23,7 @@ num-complex = { version = "0.2", features = ["std"]}
 num-traits = "*"
 realfft = "0.3"
 rustfft = "*"
+ndarray = "*"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.subscriber]
 package = "wgpu-subscriber"

@@ -120,7 +120,7 @@ impl framework::Example for Example {
         // };
 
         let dim_height = 180;
-        let dim_width = 166;
+        let dim_width = 222;
         let dim_full_width = 2654;
         let bytes_per_row = 2;
 
@@ -128,8 +128,17 @@ impl framework::Example for Example {
         let mut frame_out: Vec<i16> = vec![0; dim_full_width * dim_height]; //file.metadata().unwrap().len() as usize/2];
         file.read_i16_into::<NativeEndian>(&mut frame_out[0..(dim_full_width * dim_height)]).unwrap();
 
+
+        fn carrier_freq(x: usize) -> f32 {
+            (x as f32 + 4.8) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
+        }
+
+        fn vec_avg(v: &std::collections::VecDeque<f32>) -> f32 {
+            v.into_iter().sum::<f32>() / v.len() as f32
+        }
+
         // Do some charts with a sample the first five scanlines.
-        {
+        if false {
             use std::io::Write;
 
             // Create out.csv, which is the low-pass filtered signal.
@@ -222,14 +231,6 @@ impl framework::Example for Example {
                 writeln!(file, "{}", samp);
             }
 
-            fn carrier_freq(x: usize) -> f32 {
-                (x as f32 + 4.8) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
-            }
-
-            fn vec_avg(v: &std::collections::VecDeque<f32>) -> f32 {
-                v.into_iter().sum::<f32>() / v.len() as f32
-            }
-
 
             let sample_subset = frame_out[0..dim_full_width*5].iter()
                 .map(|x| volt_decode(*x as u16))
@@ -246,7 +247,7 @@ impl framework::Example for Example {
             let mut y_out = vec![];
             for (i, samp) in sample_subset.iter().enumerate() {
                 avg.push_front(*samp);
-                if avg.len() > 12 { // TODO make this 20
+                if avg.len() > 12 {
                     avg.pop_back();
                 }
                 let mut res = vec_avg(&avg);
@@ -370,18 +371,62 @@ impl framework::Example for Example {
                     .chunks(dim_full_width).map(|x| {
                     return x
                         .chunks(chunk_width)
-                        .map(move |y| {
-                            let sample = y.iter().map(|s| {
-                                volt_decode(*s as u16)
-                            }).sum::<f32>() / (chunk_width as f32);
+                        .enumerate()
+                        .map(move |(chunk_i, y)| {
+                            let chunk_index = chunk_i * chunk_width;
 
-                            let mut color = sample;
-                            if color > 255.0 {
-                                color = 0.0;
+                            let samples = y.iter().map(|s| {
+                                volt_decode(*s as u16)
+                            }).collect::<Vec<_>>();
+
+                            let y_sample = samples.iter().sum::<f32>() / (chunk_width as f32);
+                            let i_sample = samples.iter()
+                                .enumerate()
+                                .map(|(i, x)| x * carrier_freq(i + chunk_index).sin() * 4.)
+                                .sum::<f32>() / (chunk_width as f32);
+                            let q_sample = samples.iter()
+                                .enumerate()
+                                .map(|(i, x)| x * carrier_freq(i + chunk_index).sin() * 4.)
+                                .sum::<f32>() / (chunk_width as f32);
+
+                            let y_clamped = num::clamp(y_sample, 0., 200.) / 200.;
+                            let i_clamped = num::clamp(i_sample, -60., 60.) / 60.;
+                            let q_clamped = num::clamp(q_sample, -60., 60.) / 60.;
+                            println!("{:?}", (y_clamped, i_clamped, q_clamped));
+
+                            // let matrix = ndarray::arr1(&[y_sample, i_clamped, q_clamped]);
+                            // let con_matrix = ndarray::arr2(&[
+                            //     [1., 0.956, 0.619],
+                            //     [1., -0.272, -0.647],
+                            //     [1., -1.106, 1.703]
+                            // ]);
+                            // let rgb_matrix = matrix.dot(&con_matrix);
+                            // println!("{:?}", rgb_matrix);
+
+                            let r = y_clamped + (0.9563 * i_clamped) + (0.6210 * q_clamped);
+                            let g = y_clamped - (0.2721 * i_clamped) - (0.6474 * q_clamped);
+                            let b = y_clamped - (1.1070 * i_clamped) + (1.7046 * q_clamped);
+                            println!("    rgb -----> {:?}", (r, g, b));
+                            let r_ = r * 255.;
+                            let g_ = g * 255.;
+                            let b_ = b * 255.;
+
+                            // if avg.len() > 12 {
+                            //     avg.pop_back();
+                            // }
+                            // let mut res = vec_avg(&avg);
+                            // if res < -60. {
+                            //     res = -60.
+                            // } else if res > 60. {
+                            // res = 60
+                            // }
+
+                            let mut color = y_clamped * 255.;
+                            if color > 255. {
+                                color = 0.;
                             }
 
-                            // println!("---> {} from {}", color, 2080 - (*y >> 4));
-                            return vec![color as u8, color as u8, color as u8, 255];
+                            return vec![r_ as u8, g_ as u8, b_ as u8, 255];
                         })
                         .flatten();
                 }).flatten().collect::<Vec<_>>()
@@ -397,6 +442,8 @@ impl framework::Example for Example {
         //         }
         //     }
         // }
+
+        panic!("done");
 
         // panic!("file: {:?}", frame_out.len());
         let red_texture_data = unsafe {
