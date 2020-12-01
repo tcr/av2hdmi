@@ -302,11 +302,6 @@ impl framework::Example for Example {
                 writeln!(file, "{}", samp).ok();
             }
 
-            // Bail from the 2D render.
-            // if true {
-            //     panic!("done");
-            // }
-
             // let _ = bandpass
             //     .windows(win_len)
             //     .enumerate()
@@ -371,34 +366,59 @@ impl framework::Example for Example {
                     .chunks(dim_full_width)
                     .enumerate()
                     .map(|(line_i, x)| {
-                        let samples_vec = x
+                        let mut samples_vec = x
                             .chunks(chunk_width)
                             .enumerate()
                             .map(move |(chunk_i, y)| {
-                                let mut chunk_index = chunk_i * chunk_width;
-
-                                // [HACK] Try to force consistent colors
-                                if line_i > 11 {
-                                    chunk_index += 5;
-                                } else if line_i > 22 {
-                                    chunk_index -= 1;
-                                }
-
-                                (chunk_i, chunk_index, y.iter().map(|s| {
+                                (chunk_i, y.iter().map(|s| {
                                     volt_decode(*s as u16)
                                 }).collect::<Vec<_>>())
                             }).collect::<Vec<_>>();
 
+                        // fn get_env_thresh
+                        // std::env::var("THRESH").unwrap_or("45.".to_string()).parse::<f32>().unwrap()
+
                         // Find the inline carrier signal.
-                        let i = samples_vec.iter().position(|(chunk_i, chunk_index, samples)| {
-                            println!("{:?}", chunk_i);
-                            false
-                        });
+                        let i_fall = samples_vec.iter().find_map(|(chunk_i, samples)| {
+                            let sample = samples.iter().sum::<f32>() / (chunk_width as f32);
+                            if sample < 0. {
+                                Some(chunk_i)
+                            } else {
+                                None
+                            }
+                        }).unwrap();
+                        let mut i_rise = samples_vec.clone().into_iter().find_map(|(chunk_i, samples)| {
+                            if chunk_i < *i_fall {
+                                return None;
+                            }
+                            let sample = samples.clone().iter().sum::<f32>() / (chunk_width as f32);
+                            if sample > 45. {
+                                Some(chunk_i)
+                            } else {
+                                None
+                            }
+                        }).unwrap_or(0);
+
+                        if i_rise < 5 {
+                            i_rise += samples_vec.len();
+                        }
+                        i_rise -= 5;
+
+                        // [HACK] for rendering, fix some row offset values
+                        // if line_i < 45 && line_i > 33 {
+                        //     i_rise += 1;
+                        // }
+
+                        samples_vec.rotate_left(i_rise);
+
+                        samples_vec.rotate_right(22);
 
                         // Convert to RGB values.
-                        return samples_vec.clone().into_iter().map(|(chunk_i, chunk_index, samples)| {
+                        return samples_vec.clone().into_iter().enumerate().map(move |(chunk_i, (c_i, samples))| {
+                            let mut chunk_index = chunk_i * chunk_width;
+
                             // Calculate YIQ against carrier frequency.
-                            let sample = samples.iter().sum::<f32>() / (chunk_width as f32);
+                            let y_sample = samples.iter().sum::<f32>() / (chunk_width as f32);
                             let i_sample = samples.iter()
                                 .enumerate()
                                 .map(|(i, x)| x * carrier_freq(i + chunk_index).sin() * 4.)
@@ -408,14 +428,10 @@ impl framework::Example for Example {
                                 .map(|(i, x)| x * carrier_freq(i + chunk_index).sin() * 4.)
                                 .sum::<f32>() / (chunk_width as f32);
 
-                            let y_clamped = num::clamp(sample, 0., 200.) / 200.;
+                            let y_clamped = num::clamp(y_sample, 0., 200.) / 200.;
                             let i_clamped = num::clamp(i_sample, -60., 60.) / 60.;
                             let q_clamped = num::clamp(q_sample, -60., 60.) / 60.;
                             // println!("{:?}", (y_clamped, i_clamped, q_clamped));
-
-                            if sample < 0. {
-                                println!("---> {:?} ==> {:?}", chunk_i, sample);
-                            }
 
                             // let matrix = ndarray::arr1(&[y_sample, i_clamped, q_clamped]);
                             // let con_matrix = ndarray::arr2(&[
