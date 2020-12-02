@@ -431,7 +431,7 @@ impl framework::Example for Example {
                                 .map(|y| (y * 100.) as u32) // two digit precision
                                 .collect::<Vec<_>>();
                             let i_amp_input = (i_amps.iter().max().unwrap() - i_amps.iter().min().unwrap()) as f32;
-                            let i_amp = num::clamp(i_amp_input / 70000., 0., 1.0);
+                            let i_amp = num::clamp(i_amp_input / 90000., 0., 1.0);
                             // let i_amp = 1.0;
                             let q_amps = samples.iter()
                                 .enumerate()
@@ -439,7 +439,7 @@ impl framework::Example for Example {
                                 .map(|y| (y * 100.) as u32) // two digit precision
                                 .collect::<Vec<_>>();
                             let q_amp_input = (q_amps.iter().max().unwrap() - q_amps.iter().min().unwrap()) as f32;
-                            let q_amp = num::clamp(q_amp_input / 50000., 0., 1.0);
+                            let q_amp = num::clamp(q_amp_input / 90000., 0., 1.0);
                             // let q_amp = 1.0;
 
                             println!("i_amp {:?} q_amp {:?}", i_amp_input, q_amp_input);
