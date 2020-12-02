@@ -131,7 +131,7 @@ impl framework::Example for Example {
         // let shift = std::env::var("SHIFT").unwrap_or("0.0".to_string()).parse::<f32>().unwrap();
 
         let carrier_freq = |x: usize| -> f32 {
-            (x as f32 + 7.7) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
+            (x as f32 + 7.0) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
         };
 
         fn vec_avg(v: &std::collections::VecDeque<f32>) -> f32 {
@@ -431,7 +431,7 @@ impl framework::Example for Example {
                                 .map(|y| (y * 100.) as u32) // two digit precision
                                 .collect::<Vec<_>>();
                             let i_amp_input = (i_amps.iter().max().unwrap() - i_amps.iter().min().unwrap()) as f32;
-                            let i_amp = num::clamp(i_amp_input / 90000., 0., 1.0);
+                            let i_amp = num::clamp(i_amp_input / 80000., 0., 1.0);
                             // let i_amp = 1.0;
                             let q_amps = samples.iter()
                                 .enumerate()
@@ -439,12 +439,12 @@ impl framework::Example for Example {
                                 .map(|y| (y * 100.) as u32) // two digit precision
                                 .collect::<Vec<_>>();
                             let q_amp_input = (q_amps.iter().max().unwrap() - q_amps.iter().min().unwrap()) as f32;
-                            let q_amp = num::clamp(q_amp_input / 90000., 0., 1.0);
+                            let q_amp = num::clamp(q_amp_input / 80000., 0., 1.0);
                             // let q_amp = 1.0;
 
                             println!("i_amp {:?} q_amp {:?}", i_amp_input, q_amp_input);
 
-                            let y_clamped = (num::clamp(y_sample, 0., 180.) / 180.);
+                            let y_clamped = (num::clamp(y_sample, 0., 140.) / 140.);
                             let i_clamped = (num::clamp(i_sample, -60., 60.) / 60.) * i_amp;
                             let q_clamped = (num::clamp(q_sample, -60., 60.) / 60.) * q_amp;
                             // println!("{:?}", (y_clamped, i_clamped, q_clamped));
@@ -458,7 +458,7 @@ impl framework::Example for Example {
                             // let rgb_matrix = matrix.dot(&con_matrix);
                             // println!("{:?}", rgb_matrix);
 
-                            let r = y_clamped + (0.9563 * i_clamped) + (0.6190 * q_clamped);
+                            let r = y_clamped + (2.4563 * i_clamped) + (1.6190 * q_clamped);
                             let g = y_clamped - (0.2721 * i_clamped) - (0.6474 * q_clamped);
                             let b = y_clamped - (1.1070 * i_clamped) + (1.7046 * q_clamped);
                             // println!("    rgb -----> {:?}", (r, g, b));
