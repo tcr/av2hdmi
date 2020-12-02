@@ -128,10 +128,11 @@ impl framework::Example for Example {
         let mut frame_out: Vec<i16> = vec![0; dim_full_width * dim_height]; //file.metadata().unwrap().len() as usize/2];
         file.read_i16_into::<NativeEndian>(&mut frame_out[0..(dim_full_width * dim_height)]).unwrap();
 
+        // let shift = std::env::var("SHIFT").unwrap_or("0.0".to_string()).parse::<f32>().unwrap();
 
-        fn carrier_freq(x: usize) -> f32 {
-            (x as f32 + 4.8) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
-        }
+        let carrier_freq = |x: usize| -> f32 {
+            (x as f32 + 7.7) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
+        };
 
         fn vec_avg(v: &std::collections::VecDeque<f32>) -> f32 {
             v.into_iter().sum::<f32>() / v.len() as f32
@@ -366,51 +367,51 @@ impl framework::Example for Example {
                     .chunks(dim_full_width)
                     .enumerate()
                     .map(|(line_i, x)| {
-                        let mut samples_vec = x
-                            .chunks(chunk_width)
-                            .enumerate()
-                            .map(move |(chunk_i, y)| {
-                                (chunk_i, y.iter().map(|s| {
-                                    volt_decode(*s as u16)
-                                }).collect::<Vec<_>>())
-                            }).collect::<Vec<_>>();
-
-                        // fn get_env_thresh
-                        // std::env::var("THRESH").unwrap_or("45.".to_string()).parse::<f32>().unwrap()
+                        let mut input = x.iter()
+                            .map(|x| *x as u16)
+                            .collect::<Vec<_>>();
 
                         // Find the inline carrier signal.
-                        let i_fall = samples_vec.iter().find_map(|(chunk_i, samples)| {
-                            let sample = samples.iter().sum::<f32>() / (chunk_width as f32);
+                        let i_fall = input.windows(chunk_width).enumerate().find_map(|(i, samples)| {
+                            let sample = samples.iter()
+                                .map(|x| volt_decode(*x))
+                                .sum::<f32>() / (chunk_width as f32);
                             if sample < -40. {
-                                Some(chunk_i)
+                                Some(i)
                             } else {
                                 None
                             }
                         }).unwrap();
-                        let mut i_rise = samples_vec.clone().into_iter().find_map(|(chunk_i, samples)| {
-                            if chunk_i < *i_fall {
+                        let mut i_rise = input.windows(chunk_width).enumerate().find_map(|(i, samples)| {
+                            if i < i_fall {
                                 return None;
                             }
-                            let sample = samples.clone().iter().sum::<f32>() / (chunk_width as f32);
-                            if sample > 0. {
-                                Some(chunk_i)
+                            let sample = samples.iter()
+                                .map(|x| volt_decode(*x))
+                                .sum::<f32>() / (chunk_width as f32);
+                            if sample > -5. {
+                                Some(i)
                             } else {
                                 None
                             }
                         }).unwrap_or(0);
 
-                        // // [HACK] for rendering, fix the offset values
-                        // if line_i > 45 {
-                        //     // no op
-                        // } else if line_i > 33 {
-                        //     i_rise -= 15;
-                        // }
-
                         // TODO this should rotate on x, not samples_vec, for precise targeting
-                        samples_vec.rotate_left(i_rise);
+                        input.rotate_left(i_rise);
+
+                        let mut samples_vec = input
+                            .chunks(chunk_width)
+                            .map(move |y| {
+                                y.iter().map(|s| {
+                                    volt_decode(*s as u16)
+                                }).collect::<Vec<_>>()
+                            })
+                            .collect::<Vec<_>>();
 
                         // Convert to RGB values.
-                        return samples_vec.clone().into_iter().enumerate().map(move |(chunk_i, (c_i, samples))| {
+                        return samples_vec.clone().into_iter()
+                            .enumerate()
+                            .map(move |(chunk_i, samples)| {
                             let mut chunk_index = chunk_i * chunk_width;
 
                             // Calculate YIQ against carrier frequency.
@@ -424,9 +425,28 @@ impl framework::Example for Example {
                                 .map(|(i, x)| x * carrier_freq(i + chunk_index).cos() * 4.)
                                 .sum::<f32>() / (chunk_width as f32);
 
-                            let y_clamped = num::clamp(y_sample, 0., 200.) / 200.;
-                            let i_clamped = num::clamp(i_sample, -60., 60.) / 60.;
-                            let q_clamped = num::clamp(q_sample, -60., 60.) / 60.;
+                            let i_amps = samples.iter()
+                                .enumerate()
+                                .map(|(i, x)| x * carrier_freq(i + chunk_index).sin() * 4.)
+                                .map(|y| (y * 100.) as u32) // two digit precision
+                                .collect::<Vec<_>>();
+                            let i_amp_input = (i_amps.iter().max().unwrap() - i_amps.iter().min().unwrap()) as f32;
+                            let i_amp = num::clamp(i_amp_input / 70000., 0., 1.0);
+                            // let i_amp = 1.0;
+                            let q_amps = samples.iter()
+                                .enumerate()
+                                .map(|(i, x)| x * carrier_freq(i + chunk_index).cos() * 4.)
+                                .map(|y| (y * 100.) as u32) // two digit precision
+                                .collect::<Vec<_>>();
+                            let q_amp_input = (q_amps.iter().max().unwrap() - q_amps.iter().min().unwrap()) as f32;
+                            let q_amp = num::clamp(q_amp_input / 50000., 0., 1.0);
+                            // let q_amp = 1.0;
+
+                            println!("i_amp {:?} q_amp {:?}", i_amp_input, q_amp_input);
+
+                            let y_clamped = (num::clamp(y_sample, 0., 180.) / 180.);
+                            let i_clamped = (num::clamp(i_sample, -60., 60.) / 60.) * i_amp;
+                            let q_clamped = (num::clamp(q_sample, -60., 60.) / 60.) * q_amp;
                             // println!("{:?}", (y_clamped, i_clamped, q_clamped));
 
                             // let matrix = ndarray::arr1(&[y_sample, i_clamped, q_clamped]);
@@ -438,7 +458,7 @@ impl framework::Example for Example {
                             // let rgb_matrix = matrix.dot(&con_matrix);
                             // println!("{:?}", rgb_matrix);
 
-                            let r = y_clamped + (0.9563 * i_clamped) + (0.4210 * q_clamped);
+                            let r = y_clamped + (0.9563 * i_clamped) + (0.6190 * q_clamped);
                             let g = y_clamped - (0.2721 * i_clamped) - (0.6474 * q_clamped);
                             let b = y_clamped - (1.1070 * i_clamped) + (1.7046 * q_clamped);
                             // println!("    rgb -----> {:?}", (r, g, b));
