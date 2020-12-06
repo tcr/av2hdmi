@@ -19,4 +19,6 @@ Decoded partial capture of AV video from Sonic 3 for Genesis.
 
 # Links
 
-This code borrows heavily from [Raspberry Pi Secondary Memory Interface (SMI)](https://iosoft.blog/2020/07/16/raspberry-pi-smi/)foudn on iosoft.blog. SMI allows a NTSC signal to be captured at a high enough frequency to preserve color subcarrier.
+This code borrows heavily from [Raspberry Pi Secondary Memory Interface (SMI)](https://iosoft.blog/2020/07/16/raspberry-pi-smi/)found on iosoft.blog. SMI allows a NTSC signal to be captured at a high enough frequency to preserve color subcarrier.
+
+An easy intro to composite video decoding is [Composite video decoding: Theory and practice](https://codeandlife.com/2012/10/09/composite-video-decoding-theory-and-practice/) found on codeandlife.com. The target of this post is an FPGA, but it explains signal modulation in an approachable way.
