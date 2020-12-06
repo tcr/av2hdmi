@@ -17,7 +17,8 @@ Decoded partial capture of AV video from Sonic 3 for Genesis.
 * SMI code doesn't capture a whole NTSC frame yet + occasional digital artifacts
 * Decoding only implemented for CPU, not yet working on GPU shader
 * Color decoding is incorrect
-* Voltage normalization is incorrect
+* Horizontal sync is incorrect
+* No easy export for graph data
 
 # Links
 
