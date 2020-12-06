@@ -5,3 +5,7 @@ Raspi code for reading an uncompressed NTSC signal and rendering it with the GPU
 ```
 cargo run; ./plot
 ```
+
+# Sources
+
+* [Raspberry Pi Secondary Memory Interface (SMI)](https://iosoft.blog/2020/07/16/raspberry-pi-smi/), iosoft.blog
