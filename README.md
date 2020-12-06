@@ -2,6 +2,8 @@
 
 RasPi Zero code for reading an uncompressed NTSC signal and rendering it with the GPU, aka an AV to HDMI converter.
 
+[See this project on Hackaday.io.](https://hackaday.io/project/175460-av-to-hdmi-converter)
+
 ```
 cargo run; ./plot
 ```
