@@ -1,6 +1,6 @@
 # av2hdmi
 
-Raspi code for reading an uncompressed NTSC signal and rendering it with the GPU, aka an AV to HDMI converter.
+RasPi Zero code for reading an uncompressed NTSC signal and rendering it with the GPU, aka an AV to HDMI converter.
 
 ```
 cargo run; ./plot
@@ -17,6 +17,6 @@ Decoded partial capture of AV video from Sonic 3 for Genesis.
 * Color decoding is incorrect
 * Voltage normalization is incorrect
 
-# Sources
+# Links
 
-* [Raspberry Pi Secondary Memory Interface (SMI)](https://iosoft.blog/2020/07/16/raspberry-pi-smi/), iosoft.blog
+This code borrows heavily from [Raspberry Pi Secondary Memory Interface (SMI)](https://iosoft.blog/2020/07/16/raspberry-pi-smi/)foudn on iosoft.blog. SMI allows a NTSC signal to be captured at a high enough frequency to preserve color subcarrier.
