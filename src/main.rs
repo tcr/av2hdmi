@@ -111,9 +111,9 @@ fn main() {
                 }
             }
 
-            // std::fs::write("./frame-out", &std::slice::from_raw_parts(raw_frame.as_ptr() as *const u8, raw_frame.len() * 2));
+            std::fs::write("./frame-out", &std::slice::from_raw_parts(raw_frame.as_ptr() as *const u8, raw_frame.len() * 2));
 
-            // break;
+            break;
 
             // std::thread::sleep_ms(100);
         }
