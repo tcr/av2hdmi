@@ -119,19 +119,20 @@ impl framework::Example for Example {
         //     depth: 1,
         // };
 
+        let chunk_width = 12;
         let dim_height = 180;
         let dim_width = 222;
         let dim_full_width = 2654;
         let bytes_per_row = 2;
 
-        let mut file = File::open("./frame-out").unwrap();
+        let mut file = File::open("./captures/2").unwrap();
         let mut frame_out: Vec<i16> = vec![0; dim_full_width * dim_height]; //file.metadata().unwrap().len() as usize/2];
         file.read_i16_into::<NativeEndian>(&mut frame_out[0..(dim_full_width * dim_height)]).unwrap();
 
-        // let shift = std::env::var("SHIFT").unwrap_or("0.0".to_string()).parse::<f32>().unwrap();
+        let shift = std::env::var("SHIFT").unwrap_or("7.0".to_string()).parse::<f32>().unwrap();
 
         let carrier_freq = |x: usize| -> f32 {
-            (x as f32 + 7.0) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
+            (x as f32 + shift) * (2.0 * std::f32::consts::PI) * (3.58/41.66)
         };
 
         fn vec_avg(v: &std::collections::VecDeque<f32>) -> f32 {
@@ -139,14 +140,17 @@ impl framework::Example for Example {
         }
 
         // Do some charts with a sample the first five scanlines.
-        if false {
+        if true {
             use std::io::Write;
+
+            let dim_offset = 80;
+            let dim_range = dim_offset*dim_full_width..(dim_offset + 5)*dim_full_width;
 
             // Create out.csv, which is the low-pass filtered signal.
             let mut file = File::create("./out.csv").unwrap();
             let mut bandpass = vec![];
             let win_len = 32;
-            for samp in frame_out[0..dim_full_width*5]
+            for samp in frame_out[dim_range.clone()]
                 .windows(win_len)
                 .enumerate()
                 .map(|(w_i, w)| {
@@ -233,7 +237,7 @@ impl framework::Example for Example {
             }
 
 
-            let sample_subset = frame_out[0..dim_full_width*5].iter()
+            let sample_subset = frame_out[dim_range].iter()
                 .map(|x| volt_decode(*x as u16))
                 .collect::<Vec<_>>();
 
@@ -361,7 +365,6 @@ impl framework::Example for Example {
             let mut writer = encoder.write_header().unwrap();
 
             // Enumerate over frame chunks.
-            let chunk_width = 12;
             let data = {
                 frame_out
                     .chunks(dim_full_width)
@@ -372,16 +375,16 @@ impl framework::Example for Example {
                             .collect::<Vec<_>>();
 
                         // Find the inline carrier signal.
-                        let i_fall = input.windows(chunk_width).enumerate().find_map(|(i, samples)| {
+                        let i_fall = input.windows(chunk_width).enumerate().rev().find_map(|(i, samples)| {
                             let sample = samples.iter()
                                 .map(|x| volt_decode(*x))
                                 .sum::<f32>() / (chunk_width as f32);
-                            if sample < -40. {
+                            if sample < -40. && sample > -100. {
                                 Some(i)
                             } else {
                                 None
                             }
-                        }).unwrap();
+                        }).unwrap_or(0);
                         let mut i_rise = input.windows(chunk_width).enumerate().find_map(|(i, samples)| {
                             if i < i_fall {
                                 return None;
@@ -442,12 +445,16 @@ impl framework::Example for Example {
                             let q_amp = num::clamp(q_amp_input / 80000., 0., 1.0);
                             // let q_amp = 1.0;
 
-                            println!("i_amp {:?} q_amp {:?}", i_amp_input, q_amp_input);
+                            // println!("i_amp {:?} q_amp {:?}", i_amp_input, q_amp_input);
 
                             let y_clamped = (num::clamp(y_sample, 0., 140.) / 140.);
-                            let i_clamped = (num::clamp(i_sample, -60., 60.) / 60.) * i_amp;
-                            let q_clamped = (num::clamp(q_sample, -60., 60.) / 60.) * q_amp;
+                            let mut i_clamped = (num::clamp(i_sample, -60., 60.) / 60.) * i_amp;
+                            let mut q_clamped = (num::clamp(q_sample, -60., 60.) / 60.) * q_amp;
                             // println!("{:?}", (y_clamped, i_clamped, q_clamped));
+
+                            // Uncomment for monochrome
+                            // i_clamped = 0.;
+                            // q_clamped = 0.;
 
                             // let matrix = ndarray::arr1(&[y_sample, i_clamped, q_clamped]);
                             // let con_matrix = ndarray::arr2(&[
