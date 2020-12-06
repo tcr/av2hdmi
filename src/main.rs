@@ -147,7 +147,7 @@ impl framework::Example for Example {
             let dim_range = dim_offset*dim_full_width..(dim_offset + 5)*dim_full_width;
 
             // Create out.csv, which is the low-pass filtered signal.
-            let mut file = File::create("./out.csv").unwrap();
+            let mut file = File::create("./out/out.csv").unwrap();
             let mut bandpass = vec![];
             let win_len = 32;
             for samp in frame_out[dim_range.clone()]
@@ -242,7 +242,7 @@ impl framework::Example for Example {
                 .collect::<Vec<_>>();
 
             // Create out-sine.csv, which is a sine wave at the carrier frequency.
-            let mut file = File::create("./out-sine.csv").unwrap();
+            let mut file = File::create("./out/out-sine.csv").unwrap();
             for (i, samp) in sample_subset.iter().enumerate() {
                 writeln!(file, "{}", 20.0 * carrier_freq(i).sin()).ok();
             }
@@ -262,7 +262,7 @@ impl framework::Example for Example {
                 y_out.push(res);
             }
             // Write out file.
-            let mut file = File::create("./out-Y.csv").unwrap();
+            let mut file = File::create("./out/out-Y.csv").unwrap();
             for samp in &y_out {
                 writeln!(file, "{}", samp).ok();
             }
@@ -282,7 +282,7 @@ impl framework::Example for Example {
                 i_out.push(res);
             }
             // Write out file.
-            let mut file = File::create("./out-I.csv").unwrap();
+            let mut file = File::create("./out/out-I.csv").unwrap();
             for samp in &i_out {
                 writeln!(file, "{}", samp).ok();
             }
@@ -302,7 +302,7 @@ impl framework::Example for Example {
                 q_out.push(res);
             }
             // Write out file.
-            let mut file = File::create("./out-Q.csv").unwrap();
+            let mut file = File::create("./out/out-Q.csv").unwrap();
             for samp in &q_out {
                 writeln!(file, "{}", samp).ok();
             }
@@ -356,7 +356,7 @@ impl framework::Example for Example {
         }
 
         if true {
-            let path = Path::new(r"frame.png");
+            let path = Path::new(r"out/frame.png");
             let file = File::create(path).unwrap();
             let ref mut w = BufWriter::new(file);
 
